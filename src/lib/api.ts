@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
-import { getApiBaseUrl } from './utils';
+import { cookies } from "next/headers";
+import { getApiBaseUrl } from "./utils";
 
 type NextFetchRequestConfig = {
   revalidate?: number;
@@ -13,11 +13,11 @@ export class ApiError extends Error {
 
   constructor(response: Response, data?: unknown) {
     const message =
-      typeof data === 'object' && data && 'detail' in data
+      typeof data === "object" && data && "detail" in data
         ? String((data as { detail: unknown }).detail)
         : `API request failed with status ${response.status}`;
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
     this.status = response.status;
     this.data = data;
     this.url = response.url;
@@ -28,7 +28,7 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
 
-const isServer = typeof window === 'undefined';
+const isServer = typeof window === "undefined";
 
 export type ApiFetchOptions = {
   authenticated?: boolean;
@@ -44,7 +44,7 @@ function buildUrl(path: string): string {
     return path;
   }
   const base = getApiBaseUrl();
-  if (!path.startsWith('/')) {
+  if (!path.startsWith("/")) {
     return `${base}/${path}`;
   }
   return `${base}${path}`;
@@ -54,44 +54,55 @@ async function parseResponse<T>(response: Response): Promise<T> {
   if (response.status === 204) {
     return undefined as T;
   }
-  const contentType = response.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
     return (await response.json()) as T;
   }
   return (await response.text()) as T;
 }
 
-export async function apiFetch<T>(path: string, init: ApiInit = {}, options: ApiFetchOptions = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  init: ApiInit = {},
+  options: ApiFetchOptions = {},
+): Promise<T> {
   const { authenticated = true, revalidate, tags, next } = options;
   const url = buildUrl(path);
   const headers = new Headers(init.headers);
-  headers.set('accept', 'application/json');
+  headers.set("accept", "application/json");
 
-  if (init.body && !(init.body instanceof FormData) && !headers.has('content-type')) {
-    headers.set('content-type', 'application/json');
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("content-type")
+  ) {
+    headers.set("content-type", "application/json");
   }
 
   if (isServer && authenticated) {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const cookieHeader = cookieStore
       .getAll()
       .map(({ name, value }) => `${name}=${value}`)
-      .join('; ');
-    if (cookieHeader) {
-      headers.set('cookie', cookieHeader);
-    }
+      .join("; ");
+    if (cookieHeader) headers.set("cookie", cookieHeader);
   }
 
   const requestInit: ApiInit = {
     ...init,
     headers,
-    credentials: 'include',
+    credentials: "include",
     cache:
-      init.cache ?? (typeof revalidate === 'number' ? 'force-cache' : isServer ? 'no-store' : 'no-store'),
+      init.cache ??
+      (typeof revalidate === "number"
+        ? "force-cache"
+        : isServer
+          ? "no-store"
+          : "no-store"),
     next: next ?? init.next,
   };
 
-  if (typeof revalidate === 'number' || tags?.length) {
+  if (typeof revalidate === "number" || tags?.length) {
     requestInit.next = {
       ...requestInit.next,
       revalidate,
@@ -120,32 +131,50 @@ function jsonBody(body: unknown): BodyInit | undefined {
   return JSON.stringify(body);
 }
 
-export async function apiGet<T>(path: string, init?: ApiInit, options?: ApiFetchOptions): Promise<T> {
-  return apiFetch<T>(path, { ...init, method: init?.method ?? 'GET' }, options);
+export async function apiGet<T>(
+  path: string,
+  init?: ApiInit,
+  options?: ApiFetchOptions,
+): Promise<T> {
+  return apiFetch<T>(path, { ...init, method: init?.method ?? "GET" }, options);
 }
 
-export async function apiPost<T>(path: string, body?: unknown, init?: ApiInit, options?: ApiFetchOptions): Promise<T> {
+export async function apiPost<T>(
+  path: string,
+  body?: unknown,
+  init?: ApiInit,
+  options?: ApiFetchOptions,
+): Promise<T> {
   const fetchInit: ApiInit = {
     ...init,
-    method: 'POST',
+    method: "POST",
     body: init?.body ?? jsonBody(body),
   };
   return apiFetch<T>(path, fetchInit, options);
 }
 
-export async function apiPatch<T>(path: string, body?: unknown, init?: ApiInit, options?: ApiFetchOptions): Promise<T> {
+export async function apiPatch<T>(
+  path: string,
+  body?: unknown,
+  init?: ApiInit,
+  options?: ApiFetchOptions,
+): Promise<T> {
   const fetchInit: ApiInit = {
     ...init,
-    method: 'PATCH',
+    method: "PATCH",
     body: init?.body ?? jsonBody(body),
   };
   return apiFetch<T>(path, fetchInit, options);
 }
 
-export async function apiDelete<T>(path: string, init?: ApiInit, options?: ApiFetchOptions): Promise<T> {
+export async function apiDelete<T>(
+  path: string,
+  init?: ApiInit,
+  options?: ApiFetchOptions,
+): Promise<T> {
   const fetchInit: ApiInit = {
     ...init,
-    method: 'DELETE',
+    method: "DELETE",
   };
   return apiFetch<T>(path, fetchInit, options);
 }
