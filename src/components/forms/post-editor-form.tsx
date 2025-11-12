@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,14 +12,13 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/editor/markdown-editor";
 import { uploadImage } from "@/lib/cloudinary";
-import type { CreatePostPayload } from "@/lib/types";
-
-export type PostEditorResult = { error?: string };
+import type { CreatePostPayload, PostStatus } from "@/lib/types";
+import type { PostActionResult } from "@/app/new/actions";
 
 const schema = z.object({
   title: z.string().min(2, "제목을 입력하세요"),
-  category: z.string().min(1, "카테고리를 입력하세요"),
-  status: z.enum(["draft", "published", "private"]),
+  category: z.string().min(1, "카테고리를 선택해주세요"),
+  status: z.enum(["draft", "published"]), // 'private' 제거
   description: z.string().optional().or(z.literal("")),
   tags: z.string().optional().or(z.literal("")),
   thumbnail_url: z.string().url().optional().or(z.literal("")),
@@ -34,10 +34,11 @@ export function PostEditorForm({
   onDelete,
 }: {
   defaultValues?: Partial<PostEditorValues>;
-  onSubmit: (payload: CreatePostPayload) => Promise<PostEditorResult | void>;
+  onSubmit: (payload: CreatePostPayload) => Promise<PostActionResult>;
   submitLabel?: string;
-  onDelete?: () => Promise<PostEditorResult | void>;
+  onDelete?: () => Promise<PostActionResult>;
 }) {
+  const router = useRouter();
   const {
     register,
     handleSubmit,
@@ -81,7 +82,7 @@ export function PostEditorForm({
         const payload: CreatePostPayload = {
           title: values.title,
           category: values.category,
-          status: values.status,
+          status: values.status as PostStatus,
           description: values.description || undefined,
           thumbnail_url: values.thumbnail_url || undefined,
           content_md: values.content_md,
@@ -90,11 +91,17 @@ export function PostEditorForm({
             .map((tag) => tag.trim())
             .filter(Boolean),
         };
+
+        const toastId = toast.loading("게시물을 저장하는 중입니다...");
         const result = await onSubmit(payload);
-        if (result && result.error) {
-          toast.error(result.error);
+        toast.dismiss(toastId);
+
+        if (result.success) {
+          toast.success("게시물이 성공적으로 저장되었습니다.");
+          router.push(result.redirectUrl);
+          router.refresh();
         } else {
-          toast.success("게시물이 저장되었습니다. 잠시만 기다려주세요.");
+          toast.error(result.error);
         }
       })}
     >
@@ -112,6 +119,9 @@ export function PostEditorForm({
             카테고리
           </label>
           <Select {...register("category")}>
+            <option value="" disabled>
+              카테고리를 선택하세요
+            </option>
             <option value="free">자유</option>
             <option value="dev">개발</option>
             <option value="celeb">연예</option>
@@ -132,7 +142,6 @@ export function PostEditorForm({
           <Select {...register("status")}>
             <option value="draft">임시 저장</option>
             <option value="published">공개</option>
-            <option value="private">비공개</option>
           </Select>
           {errors.status && (
             <p className="text-sm text-red-600">{errors.status.message}</p>
@@ -209,17 +218,16 @@ export function PostEditorForm({
             variant="destructive"
             disabled={isSubmitting}
             onClick={async () => {
-              try {
-                const result = await onDelete();
-                if (result && result.error) {
-                  toast.error(result.error);
-                }
-              } catch (error) {
-                toast.error(
-                  error instanceof Error
-                    ? error.message
-                    : "삭제에 실패했습니다.",
-                );
+              const toastId = toast.loading("게시물을 삭제하는 중입니다...");
+              const result = await onDelete();
+              toast.dismiss(toastId);
+
+              if (result.success) {
+                toast.success("게시물이 삭제되었습니다.");
+                router.push(result.redirectUrl);
+                router.refresh();
+              } else {
+                toast.error(result.error);
               }
             }}
           >

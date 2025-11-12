@@ -1,49 +1,59 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
+// import { redirect } from 'next/navigation'; // <-- redirect를 더 이상 사용하지 않음
 import { apiDelete, apiPatch, ApiError } from '@/lib/api';
-import type { CreatePostPayload, PostDetail, UpdatePostPayload } from '@/lib/types';
+import type { UpdatePostPayload, PostDetail } from '@/lib/types';
+
+// 서버 액션의 반환 타입을 명확하게 정의합니다.
+// 이 타입은 나중에 폼 컴포넌트에서도 사용될 수 있습니다.
+export type PostActionResult = {
+  success: true;
+  redirectUrl: string;
+} | {
+  success: false;
+  error: string;
+  status?: number;
+};
 
 export async function updatePostAction(
   blogSlug: string,
   postSlug: string,
-  payload: CreatePostPayload,
-) {
+  payload: UpdatePostPayload,
+): Promise<PostActionResult> {
   try {
-    const updatePayload: UpdatePostPayload = {
-      title: payload.title,
-      category: payload.category,
-      status: payload.status,
-      description: payload.description,
-      thumbnail_url: payload.thumbnail_url,
-      content_md: payload.content_md,
-      tags: payload.tags,
-    };
     const post = await apiPatch<PostDetail>(
       `/api/v1/blogs/${blogSlug}/posts/${postSlug}`,
-      updatePayload,
+      payload,
       { cache: 'no-store' },
     );
     revalidatePath(`/${blogSlug}/posts/${postSlug}`);
-    redirect(`/${blogSlug}/posts/${post.slug ?? postSlug}`);
+
+    return {
+      success: true,
+      redirectUrl: `/${blogSlug}/posts/${post.slug ?? postSlug}`,
+    };
   } catch (error) {
     if (error instanceof ApiError) {
-      return { error: error.message, status: error.status };
+      return { success: false, error: error.message, status: error.status };
     }
-    return { error: '게시물을 수정할 수 없습니다. 다시 시도해주세요.', status: 500 };
+    return { success: false, error: '게시물을 수정할 수 없습니다. 다시 시도해주세요.' };
   }
 }
 
-export async function deletePostAction(blogSlug: string, postSlug: string) {
+export async function deletePostAction(blogSlug: string, postSlug: string): Promise<PostActionResult> {
   try {
     await apiDelete(`/api/v1/blogs/${blogSlug}/posts/${postSlug}`);
     revalidatePath(`/${blogSlug}/posts`);
-    redirect(`/${blogSlug}/posts`);
+
+    return {
+      success: true,
+      redirectUrl: `/${blogSlug}/posts`,
+    };
   } catch (error) {
     if (error instanceof ApiError) {
-      return { error: error.message, status: error.status };
+      return { success: false, error: error.message, status: error.status };
     }
-    return { error: '게시물을 삭제할 수 없습니다. 다시 시도해주세요.', status: 500 };
+    return { success: false, error: '게시물을 삭제할 수 없습니다. 다시 시도해주세요.' };
   }
 }
